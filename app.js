@@ -38,26 +38,30 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)hid=Date.no
 function render(){
   if(locked&&db.set.pin)return lockScreen();
   $('#top').innerHTML=(db.set.logo?`<img src="${db.set.logo}">`:'')+`<div><b>AMULET STOCK</b><small>${esc(db.set.shop)}</small></div>`;
-  const tabs=[['home','หน้าหลัก'],['stock','สต็อก'],['models','รุ่น'],['add','เพิ่ม'],['report','รายงาน'],['set','ตั้งค่า']];
-  const cur=({detail:'stock',sell:'stock',model:'models'})[page]||page;
+  const tabs=[['home','หน้าหลัก'],['stock','สต็อก'],['report','รายงาน'],['set','ตั้งค่า']];
+  const cur=({detail:'stock',sell:'stock',model:'home',models:'home',add:'home'})[page]||page;
   $('#nav').innerHTML=tabs.map(([k,l])=>`<a class="${cur==k?'on':''}" onclick="${k=='add'?'newAdd()':`go('${k}')`}">${l}</a>`).join('');
   $('#app').innerHTML=({home,stock,models,model,add,detail,sell,report,set})[page]();
 }
-function home(){
+function dash(){
   const L=db.amulets,c=s=>L.filter(a=>a.status==s).length,st=L.filter(a=>a.status!='sold');
   const rev=db.sales.reduce((t,s)=>t+s.price,0),pr=db.sales.reduce((t,s)=>t+s.profit,0);
   const box=(k,v,g)=>`<div class="card"><div class="k">${k}</div><div class="v ${g?'g':''}">${v}</div></div>`;
-  return `<h2>ภาพรวม</h2><div class="grid">${box('พระทั้งหมด',L.length)}${box('มีในสต็อก',c('in'))}${box('จอง',c('res'))}${box('ขายแล้ว',c('sold'))}
-  ${box('ต้นทุนในสต็อก',n(st.reduce((t,a)=>t+cost(a),0)))}${box('มูลค่าราคาขาย',n(st.reduce((t,a)=>t+(+a.price||0),0)))}
-  ${box('กำไรคาดการณ์',n(st.reduce((t,a)=>t+exp(a),0)),1)}${box('ยอดขาย',n(rev))}${box('กำไรจริง',n(pr),1)}</div>
-  <div class="btns"><button class="p" onclick="newAdd()">+ เพิ่มพระ</button><button onclick="go('stock')">ค้นหาพระ</button></div>
-  ${L.length?'':'<div class="note">ยังไม่มีพระ เริ่มจากกด “เพิ่มพระ” แล้วกรอกข้อมูลรุ่นครั้งเดียว</div>'}`;
-}
+  return `<div class="grid">${box('พระทั้งหมด',L.length)}${box('มีในสต็อก',c('in'))}${box('จอง',c('res'))}${box('ขายแล้ว',c('sold'))}${box('ต้นทุนในสต็อก',n(st.reduce((t,a)=>t+cost(a),0)))}${box('มูลค่าราคาขาย',n(st.reduce((t,a)=>t+(+a.price||0),0)))}${box('กำไรคาดการณ์',n(st.reduce((t,a)=>t+exp(a),0)),1)}${box('ยอดขาย',n(rev))}${box('กำไรจริง',n(pr),1)}</div>`}
+function home(){
+  const rows=db.models.map(m=>{const L=db.amulets.filter(a=>a.mid==m.id),c=s=>L.filter(a=>a.status==s).length;
+  return `<div class="card"><div style="display:flex;gap:10px;align-items:flex-start" onclick="go('model','${m.id}')">${m.img?`<img src="${m.img}" style="width:56px;height:56px;border-radius:8px;object-fit:cover;flex:none">`:''}
+  <div style="flex:1;min-width:0"><b>${esc(m.name)} ${esc(m.gen)}</b><div class="k">${[m.mat,m.type,m.year].filter(Boolean).map(esc).join(' • ')}</div></div>
+  <div style="text-align:right"><div class="v g" style="line-height:1">${c('in')}</div><div class="k">องค์ในสต็อก</div></div></div>
+  <div style="display:flex;gap:6px;margin:10px 0"><span class="chip sold">จอง ${c('res')}</span><span class="chip sold">ขายแล้ว ${c('sold')}</span><span class="chip sold">รวม ${L.length}</span></div>
+  <div class="btns" style="margin:0"><button onclick="newAdd('${m.id}')">+ เพิ่ม</button><button class="p" onclick="sellOne('${m.id}')">ขาย 1 องค์</button></div></div>`}).join('');
+  return `<h2>รุ่นพระ</h2>${rows||'<div class="note">ยังไม่มีรุ่น กด “+ รุ่นใหม่” เพื่อเริ่ม</div>'}<button class="p f" style="margin-top:6px" onclick="newAdd()">+ รุ่นใหม่</button>`}
+function sellOne(mid){const a=db.amulets.find(x=>x.mid==mid&&x.status=='in');if(!a)return alert('ไม่มีสต็อกเหลือในรุ่นนี้');go('sell',a.id)}
 /* ---------- stock ---------- */
 const hay=a=>{const m=M(a.mid)||{};return [m.name,m.gen,m.temple,m.mat,m.type,m.year,a.code,a.no,a.sku].join(' ').toLowerCase()};
 function rows(){
   const k=q.trim().toLowerCase(),L=db.amulets.filter(a=>(flt=='all'||a.status==flt)&&(!k||hay(a).includes(k)));
-  return L.length?L.map(a=>`<div class="row" onclick="go('detail','${a.id}')">${a.img.f?`<img src="${a.img.f}">`:'<div class="ph0"></div>'}
+  return L.length?L.map(a=>`<div class="row" onclick="go('detail','${a.id}')">${(a.img.f||(M(a.mid)||{}).img)?`<img src="${a.img.f||M(a.mid).img}">`:'<div class="ph0"></div>'}
   <div class="t"><b>${title(a)}</b><span>${sub(a)}</span><span>${esc(a.sku)} • เลข ${esc(a.no)||'-'} • ${esc(a.code)||'-'}</span></div>
   <div style="text-align:right">${chip(a.status)}<div class="k">${n(a.price)}</div></div></div>`).join(''):'<div class="note">ไม่พบรายการ</div>';
 }
@@ -95,7 +99,7 @@ function delM(id){if(db.amulets.some(a=>a.mid==id))return alert('ลบไม่
 const newItem=()=>({sku:'',no:'',code:'',buy:'',frame:'',ship:'',other:'',price:'',min:'',cond:'',note:'',img:{}});
 const inc=s=>/\d+$/.test(s||'')?s.replace(/\d+$/,m=>String(+m+1).padStart(m.length,'0')):'';
 const CP=['buy','frame','ship','other','price','min','cond'];
-function newAdd(mid=''){draft={mode:'add',mid,m:{},items:[newItem()],each:false,cnt:1};
+function newAdd(mid=''){draft={mode:'add',mid,m:{},items:[newItem()],each:false,cnt:1,more:false};
   if(mid){const L=db.amulets.filter(a=>a.mid==mid),l=L[L.length-1];if(l){CP.forEach(k=>draft.items[0][k]=l[k]);draft.items[0].no=inc(l.no)}}go('add')}
 function editA(id){const a=A(id);draft={mode:'editA',aid:id,mid:a.mid,m:{},items:[structuredClone(a)],multi:false};go('add')}
 function editM(id){draft={mode:'editM',mid:id,m:structuredClone(M(id)),items:[]};go('add')}
@@ -106,28 +110,28 @@ function sync(){if(page!='add'||!draft)return;
   if($('#m_name')||draft.mode=='editM')MF.forEach(([k])=>{const e=$('#m_'+k);if(e)draft.m[k]=e.value});
   const e=$('#cnt');if(e)draft.cnt=Math.max(1,Math.min(100,Math.floor(+e.value)||1));
   draft.items.forEach((it,i)=>{[...IF.map(x=>x[0]),'cond','note'].forEach(k=>{const e=$(`#i${i}_${k}`);if(e)it[k]=e.value})})}
-function photo(i,k,l,u){return `<label class="ph">${u?`<img src="${u}">`:`<span>${l}</span>`}<input type="file" accept="image/*" hidden onchange="pick(this,${i},'${k}')"></label>`}
-function pick(inp,i,k){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{
-  const s=Math.min(1,900/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);
-  const u=c.toDataURL('image/jpeg',.72);if(i=='logo'){db.set.logo=u;save()}else{sync();if(i=='m')draft.m.img=u;else draft.items[i].img[k]=u}render()};im.src=r.result};r.readAsDataURL(f)}
+function photo(i,k,l,u){return `<label class="ph">${u?`<img src="${u}">`:`<span>${l}</span>`}<input type="file" accept="image/*" hidden onchange="pick(this,'${i}','${k}')"></label>`}
+function readImg(f,cb){const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const s=Math.min(1,900/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);cb(c.toDataURL('image/jpeg',.72))};im.src=r.result};r.readAsDataURL(f)}
+function pick(inp,i,k){const f=inp.files[0];if(!f)return;readImg(f,u=>{if(i=='logo'){db.set.logo=u;save()}else if(i=='det'){A(arg).img[k]=u;save()}else{sync();if(i=='m')draft.m.img=u;else draft.items[i].img[k]=u}render()})}
+const XI=[['frame','ค่ากรอบ',1],['ship','ค่าส่ง',1],['other','ค่าใช้จ่ายอื่น',1],['min','ราคาต่ำสุด',1],['cond','สภาพพระ'],['note','หมายเหตุ']];
 function add(){
-  const d=draft,m=d.mode,showM=m=='editM'||(m=='add'&&!d.mid),shared=m=='add'&&!d.each&&d.cnt>1;
-  let h=`<h2>${m=='add'?'เพิ่มพระ':m=='editA'?'แก้ไขพระ':'แก้ไขรุ่น'}</h2>`;
-  if(m=='add'){
-    h+=`<label>รุ่น<select onchange="sync();draft.mid=this.value;render()"><option value="">+ สร้างรุ่นใหม่</option>${db.models.map(x=>`<option value="${x.id}" ${x.id==d.mid?'selected':''}>${esc(x.name)} ${esc(x.gen)}</option>`).join('')}</select></label>`;
-    var cntBox=`<label>จำนวนที่มีอยู่ในสต็อก (องค์)<input id="cnt" type="number" inputmode="numeric" min="1" max="100" value="${d.each?d.items.length:d.cnt}" onchange="sync();d_cnt()"></label>
-    <div class="k">${d.mid?`ตอนนี้รุ่นนี้มี ${db.amulets.filter(a=>a.mid==d.mid).length} องค์ จำนวนนี้คือที่จะเพิ่มใหม่ • `:''}ไม่มีเลขหรือโค้ดก็ใส่จำนวนได้เลย</div>
-    <button class="f" style="margin-top:8px" onclick="sync();toggleEach()">${d.each?'กลับไปกรอกแบบรวม (ข้อมูลเหมือนกันทุกองค์)':'กรอกรายองค์ (เลขประจำองค์ / โค้ด / รูป)'}</button>`}
-  if(m=='add'&&!showM)h+=`<div class="card">${cntBox}</div>`;
-  if(showM)h+=`<h3>ข้อมูลรุ่น (กรอกครั้งเดียว)</h3><div class="card">${MF.map(([k,l])=>inp('m_'+k,l,d.m[k]||'')).join('')}<div style="max-width:120px;margin-top:8px">${photo('m','','รูปรุ่น',d.m.img)}</div>${m=='add'?`<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:4px">${cntBox}</div>`:''}</div>`;
-  if(m!='editM'){const L=(m=='add'&&!d.each)?d.items.slice(0,1):d.items;
-   h+=L.map((it,i)=>`<div class="card"><b>${shared?`ราคา/สภาพที่ใช้ร่วมกันทั้ง ${d.cnt} องค์`:`องค์ที่ ${i+1}`}</b>${m=='editA'?` <span class="k">${esc(it.sku)}</span>`:''}
-   <div class="two">${IF.filter(([k])=>!(shared&&['no','code'].includes(k))).map(([k,l])=>`<div>${inp(`i${i}_${k}`,l,it[k],!['no','code'].includes(k))}</div>`).join('')}</div>
-   ${inp(`i${i}_cond`,'สภาพพระ',it.cond)}${inp(`i${i}_note`,'หมายเหตุ',it.note)}
-   ${shared?'<div class="k">เลขประจำองค์ โค้ด และรูป เพิ่มทีหลังได้โดยแตะที่องค์นั้น แล้วกดแก้ไข</div>':`<div class="photos">${[['f','หน้า'],['b','หลัง'],['s','ข้าง'],['d','ตำหนิ']].map(([k,l])=>photo(i,k,l,it.img[k])).join('')}</div>`}
-   ${m=='add'&&d.each&&d.items.length>1?`<button class="d f" style="margin-top:8px" onclick="sync();draft.items.splice(${i},1);render()">ลบองค์นี้</button>`:''}</div>`).join('');
-   if(m=='add'&&d.each)h+=`<button class="f" onclick="sync();draft.items.push(newItem());render()">+ เพิ่มองค์</button>`}
-  return h+`<div class="btns"><button onclick="go('home')">ยกเลิก</button><button class="p" onclick="saveForm()">บันทึก</button></div>`;
+  const d=draft,m=d.mode,isNew=m=='add'&&!d.mid,sh=m=='add'&&!d.each,mo=M(d.mid)||{},it=d.items[0]||{};
+  let h=`<h2>${m=='editA'?'แก้ไขพระ':m=='editM'?'แก้ไขรุ่น':isNew?'รุ่นใหม่':'เพิ่มสต็อก: '+esc(mo.name)+' '+esc(mo.gen)}</h2>`;
+  if(m=='editM')h+=`<div class="card">${MF.map(([k,l])=>inp('m_'+k,l,d.m[k]||'')).join('')}<div style="max-width:140px;margin-top:8px">${photo('m','','รูปพระ',d.m.img)}</div></div>`;
+  if(isNew)h+=`${inp('m_name','ชื่อพระและรุ่น',d.m.name||'')}<div class="two">${inp('m_mat','เนื้อ',d.m.mat||'')}${inp('m_type','พิมพ์',d.m.type||'')}</div>`;
+  if(m=='add'){const cnt=`<label>จำนวนองค์<input id="cnt" type="number" inputmode="numeric" min="1" max="100" value="${d.each?d.items.length:d.cnt}" onchange="sync();d_cnt()"></label>`;
+    h+=isNew?`<div class="two">${inp('m_year','ปี',d.m.year||'')}${cnt}</div>`:`${cnt}<div class="k">ตอนนี้รุ่นนี้มี ${db.amulets.filter(a=>a.mid==d.mid).length} องค์ (จำนวนนี้คือที่จะเพิ่มใหม่)</div>`}
+  if(sh){h+=`<div class="two">${inp('i0_buy','ราคาซื้อ (ต่อองค์)',it.buy,1)}${inp('i0_price','ราคาขาย',it.price,1)}</div>`;
+    if(isNew)h+=`<div style="max-width:150px;margin:8px 0">${photo('m','','+ เพิ่มรูปพระ',d.m.img)}</div><div class="k">รูปนี้ใช้กับทุกองค์ ใส่รูปแยกแต่ละองค์ได้ทีหลัง</div>`;
+    h+=`<button class="f" style="margin-top:10px" onclick="sync();draft.more=!draft.more;render()">รายละเอียดเพิ่มเติม ${d.more?'▴':'▾'}</button>`;
+    if(d.more){h+=`<div class="card">`;if(isNew)h+=[['temple','วัด / สำนัก'],['prov','จังหวัด'],['desc','รายละเอียด'],['note','หมายเหตุรุ่น']].map(([k,l])=>inp('m_'+k,l,d.m[k]||'')).join('');
+      h+=XI.map(([k,l,n])=>inp('i0_'+k,l,it[k],n)).join('')+`<button class="f" style="margin-top:8px" onclick="sync();toggleEach()">กรอกรายองค์ (เลขประจำองค์ / โค้ด / รูปแต่ละองค์)</button></div>`}}
+  if(!sh&&m!='editM'){h+=d.items.map((it,i)=>`<div class="card"><b>องค์ที่ ${i+1}</b>${m=='editA'?` <span class="k">${esc(it.sku)}</span>`:''}
+   <div class="two">${IF.map(([k,l])=>`<div>${inp(`i${i}_${k}`,l,it[k],!['no','code'].includes(k))}</div>`).join('')}</div>${inp(`i${i}_cond`,'สภาพพระ',it.cond)}${inp(`i${i}_note`,'หมายเหตุ',it.note)}
+   <div class="photos">${[['f','หน้า'],['b','หลัง'],['s','ข้าง'],['d','ตำหนิ']].map(([k,l])=>photo(i,k,l,it.img[k])).join('')}</div>
+   ${m=='add'&&d.items.length>1?`<button class="d f" style="margin-top:8px" onclick="sync();draft.items.splice(${i},1);render()">ลบองค์นี้</button>`:''}</div>`).join('');
+   if(m=='add')h+=`<button class="f" onclick="sync();draft.items.push(newItem());render()">+ เพิ่มองค์</button><button class="f" style="margin-top:8px" onclick="sync();toggleEach()">กลับไปกรอกแบบรวม</button>`}
+  return h+`<div class="btns"><button onclick="go('home')">ยกเลิก</button><button class="p" onclick="saveForm()">บันทึก${sh&&d.cnt>1?' '+d.cnt+' องค์':''}</button></div>`;
 }
 function d_cnt(){if(draft.each)setCnt();else render()}
 function toggleEach(){draft.each=!draft.each;if(draft.each)setCnt();else{draft.items=[draft.items[0]];render()}}
@@ -149,12 +153,12 @@ function saveForm(){
   if(d.mode=='editA'){const a=A(d.aid),it=d.items[0];['no','code','buy','frame','ship','other','price','min','cond','note','img'].forEach(k=>a[k]=it[k]);mv(a.id,'แก้ไขข้อมูล');save();toast('บันทึกแล้ว');return go('detail',a.id)}
   if(!d.mid)db.models.push({id:mid,...d.m});
   const made=list.map(it=>{const a={...it,id:uid(),mid,sku:nextCode(),status:'in',inDate:today(),soldDate:''};db.amulets.push(a);mv(a.id,'ซื้อเข้า');mv(a.id,'เข้าสต็อก');return a.sku});
-  save();toast(`เพิ่ม ${made.length} องค์ (${made[0]}${made.length>1?' ถึง '+made.at(-1):''})`);go(d.mid?'model':'models',mid)}
+  save();toast(`เพิ่ม ${made.length} องค์ (${made[0]}${made.length>1?' ถึง '+made.at(-1):''})`);go('home')}
 /* ---------- detail ---------- */
 function detail(){
   const a=A(arg),m=M(a.mid)||{},s=sale(a);
   const info=[['รหัสสินค้า',a.sku],['รุ่น',m.name+' '+(m.gen||'')],['เนื้อ',m.mat],['พิมพ์',m.type],['ปี',m.year],['เลขประจำองค์',a.no],['โค้ด',a.code],['สภาพ',a.cond],['ต้นทุนรวม',n(cost(a))],['ราคาขาย',n(a.price)],['ราคาต่ำสุด',n(a.min)],[s?'กำไรจริง':'กำไรคาดการณ์',n(s?s.profit:exp(a))],['เข้าสต็อก',a.inDate],['หมายเหตุ',a.note]];
-  return `<h2>${title(a)} ${chip(a.status)}</h2><div class="photos">${[['f','หน้า'],['b','หลัง'],['s','ข้าง'],['d','ตำหนิ']].map(([k,l])=>`<div class="ph">${a.img[k]?`<img src="${a.img[k]}">`:`<span>${l}</span>`}</div>`).join('')}</div>
+  return `<h2>${title(a)} ${chip(a.status)}</h2><div class="photos">${[['f','หน้า'],['b','หลัง'],['s','ข้าง'],['d','ตำหนิ']].map(([k,l])=>{const im=a.img[k]||(k=='f'?m.img:'');return `<label class="ph">${im?`<img src="${im}">`:`<span>+ ${l}</span>`}<input type="file" accept="image/*" hidden onchange="pick(this,'det','${k}')"></label>`}).join('')}</div><div class="k" style="margin-top:4px">แตะช่องรูปเพื่อเพิ่มหรือเปลี่ยนรูป</div>
   <div class="card">${info.map(([k,v])=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0"><span class="k">${k}</span><span>${esc(v)||'-'}</span></div>`).join('')}</div>
   <div class="btns">${a.status!='sold'?`<button class="p" onclick="go('sell','${a.id}')">ขาย</button><button onclick="reserve('${a.id}')">${a.status=='res'?'ยกเลิกการจอง':'จอง'}</button>`:`<button onclick="unsell('${a.id}')">ยกเลิกการขาย</button>`}
   <button onclick="editA('${a.id}')">แก้ไข</button><button class="d" onclick="delA('${a.id}')">ลบ</button></div>
@@ -165,17 +169,14 @@ function unsell(id){if(!confirm('ยกเลิกการขาย คืน�
 function delA(id){if(!confirm('ลบพระองค์นี้ถาวร?'))return;db.amulets=db.amulets.filter(a=>a.id!=id);db.sales=db.sales.filter(s=>s.aid!=id);db.moves=db.moves.filter(x=>x.aid!=id);save();go('stock')}
 /* ---------- sell ---------- */
 function sell(){
-  const a=A(arg);
-  return `<h2>ขาย: ${title(a)}</h2><div class="k">${esc(a.sku)} • ต้นทุนรวม ${n(cost(a))}</div><div class="card">
-  ${inp('s_price','ราคาขายจริง',a.price,1)}${inp('s_ship','ค่าส่ง',0,1)}${inp('s_oth','ค่าใช้จ่ายเพิ่มเติม',0,1)}${inp('s_date','วันที่ขาย',today())}
-  ${inp('s_cust','ชื่อลูกค้า','')}${inp('s_phone','เบอร์โทร / LINE','')}
-  <label>ช่องทางการขาย<select id="s_ch"><option>หน้าร้าน</option><option>LINE</option><option>Facebook</option><option>อื่นๆ</option></select></label>${inp('s_note','หมายเหตุ','')}
-  <div class="v g" id="pp" style="margin-top:8px"></div></div>
-  <div class="btns"><button onclick="go('detail','${a.id}')">ยกเลิก</button><button class="p" onclick="doSell('${a.id}')">บันทึกการขาย</button></div>
-  `+(setTimeout(()=>{['s_price','s_ship','s_oth'].forEach(i=>$('#'+i).oninput=pp);pp()}),'');
-}
+  const a=A(arg);setTimeout(()=>{['s_price','s_ship','s_oth'].forEach(i=>$('#'+i).oninput=pp);pp()});
+  return `<h2>ขาย ${title(a)}</h2><div class="k">${esc(a.sku)} • ต้นทุน ${n(cost(a))} บาท</div><div class="card">
+  ${inp('s_price','ราคาขายจริง',a.price,1)}<div class="two">${inp('s_ship','ค่าส่ง',0,1)}${inp('s_oth','ค่าใช้จ่ายอื่น',0,1)}</div>
+  <div class="card" style="text-align:center;margin:8px 0 0"><div class="k">กำไร</div><div class="v g" id="pp"></div></div>${inp('s_cust','ลูกค้า (ไม่ใส่ก็ได้)','')}
+  <input type="hidden" id="s_date" value="${today()}"><input type="hidden" id="s_phone"><input type="hidden" id="s_ch" value="หน้าร้าน"><input type="hidden" id="s_note"></div>
+  <div class="btns"><button onclick="go('detail','${a.id}')">ยกเลิก</button><button class="p" onclick="doSell('${a.id}')">บันทึกการขาย</button></div>`}
 const sv=()=>[+$('#s_price').value||0,+$('#s_ship').value||0,+$('#s_oth').value||0];
-function pp(){const a=A(arg),[p,s,o]=sv();$('#pp').textContent='กำไรจริง '+n(p-cost(a)-s-o)+' บาท'}
+function pp(){const a=A(arg),[p,s,o]=sv();const g=p-cost(a)-s-o;$('#pp').textContent=(g>0?'+':'')+n(g)+' บาท'}
 function doSell(id){
   const a=A(id),[p,s,o]=sv();if(!(p>0))return alert('กรอกราคาขายจริง');
   const cu=$('#s_cust').value.trim();
@@ -188,7 +189,7 @@ function report(){
   const best=Object.entries(by).sort((a,b)=>b[1]-a[1])[0],now=Date.now();
   const old=db.amulets.filter(a=>a.status=='in'&&(now-new Date(a.inDate))/864e5>=30);
   const st=db.amulets.filter(a=>a.status!='sold');
-  return `<h2>รายงาน</h2><div class="grid"><div class="card"><div class="k">ยอดขาย</div><div class="v">${n(S.reduce((t,s)=>t+s.price,0))}</div></div>
+  return `<h2>รายงาน</h2>${dash()}<div class="grid" style="margin-top:10px"><div class="card"><div class="k">ยอดขาย</div><div class="v">${n(S.reduce((t,s)=>t+s.price,0))}</div></div>
   <div class="card"><div class="k">กำไร</div><div class="v g">${n(S.reduce((t,s)=>t+s.profit,0))}</div></div>
   <div class="card"><div class="k">ขายไปแล้ว (องค์)</div><div class="v">${S.length}</div></div>
   <div class="card"><div class="k">มูลค่าสต็อก (ต้นทุน)</div><div class="v">${n(st.reduce((t,a)=>t+cost(a),0))}</div></div></div>
