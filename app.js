@@ -22,8 +22,21 @@ const title=a=>{const m=M(a.mid)||{};return esc(m.name)+' '+esc(m.gen)};
 const sub=a=>{const m=M(a.mid)||{};return [m.mat,m.type,m.year].filter(Boolean).map(esc).join(' • ')};
 const chip=s=>`<span class="chip ${s}">${ST[s]}</span>`;
 const go=(p,a=null)=>{page=p;arg=a;render();scrollTo(0,0)};
+/* ---------- PIN lock ---------- */
+let locked=false,hid=0;
+const sha=async x=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(x)))].map(b=>b.toString(16).padStart(2,'0')).join('');
+function lockScreen(){$('#top').innerHTML='<div><b>AMULET STOCK</b></div>';$('#nav').innerHTML='';
+  $('#app').innerHTML=`<div class="card" style="margin-top:60px;text-align:center"><h2>ใส่รหัสผ่าน</h2><input id="pin" type="password" inputmode="numeric" maxlength="6" style="text-align:center;font-size:24px;letter-spacing:.3em" onkeydown="if(event.key=='Enter')tryPin()"><div class="k" id="pmsg" style="margin-top:6px"></div><button class="p f" style="margin-top:10px" onclick="tryPin()">ปลดล็อก</button></div>`;setTimeout(()=>$('#pin')?.focus(),50)}
+async function tryPin(){const v=$('#pin').value,p=db.set.pin;if(!v)return;if(await sha(p.salt+v)==p.hash){locked=false;render()}else{$('#pin').value='';$('#pmsg').textContent='รหัสไม่ถูกต้อง'}}
+async function setPin(){if(db.set.pin){const o=prompt('ใส่รหัสเดิม');if(o===null)return;if(await sha(db.set.pin.salt+o)!=db.set.pin.hash)return alert('รหัสเดิมไม่ถูกต้อง')}
+  const a=prompt('ตั้งรหัสใหม่ (ตัวเลข 4-6 หลัก)');if(a===null)return;if(!/^\d{4,6}$/.test(a))return alert('ต้องเป็นตัวเลข 4-6 หลัก');
+  if(prompt('ใส่รหัสอีกครั้งเพื่อยืนยัน')!==a)return alert('รหัสไม่ตรงกัน');
+  const salt=uid();db.set.pin={salt,hash:await sha(salt+a)};save();toast('ตั้งรหัสแล้ว');render()}
+async function rmPin(){const o=prompt('ใส่รหัสเพื่อปิดการล็อก');if(o===null)return;if(await sha(db.set.pin.salt+o)!=db.set.pin.hash)return alert('รหัสไม่ถูกต้อง');delete db.set.pin;save();render()}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)hid=Date.now();else if(db&&db.set.pin&&hid&&Date.now()-hid>300000){locked=true;render()}});
 /* ---------- render ---------- */
 function render(){
+  if(locked&&db.set.pin)return lockScreen();
   $('#top').innerHTML=(db.set.logo?`<img src="${db.set.logo}">`:'')+`<div><b>AMULET STOCK</b><small>${esc(db.set.shop)}</small></div>`;
   const tabs=[['home','หน้าหลัก'],['stock','สต็อก'],['models','รุ่น'],['add','เพิ่ม'],['report','รายงาน'],['set','ตั้งค่า']];
   const cur=({detail:'stock',sell:'stock',model:'models'})[page]||page;
@@ -166,13 +179,15 @@ function set(){
   const s=db.set;
   return `<h2>ตั้งค่า</h2><div class="card">${inp('st_shop','ชื่อร้าน',s.shop)}${inp('st_pre','รูปแบบรหัสสินค้า (นำหน้า)',s.prefix)}<div class="k">ตัวอย่าง: ${esc(s.prefix)}${String(db.seq+1).padStart(6,'0')}</div>
   <div style="max-width:100px;margin-top:8px">${photo('logo','','โลโก้',s.logo)}</div><button class="p f" style="margin-top:10px" onclick="saveSet()">บันทึกการตั้งค่า</button></div>
+  <h3>รหัสผ่านเข้าแอป</h3><div class="card"><div class="k">${s.pin?'เปิดใช้งานอยู่ (ล็อกอัตโนมัติเมื่อออกจากแอปเกิน 5 นาที)':'ยังไม่ได้ตั้งรหัส'}</div><button class="p f" style="margin-top:8px" onclick="setPin()">${s.pin?'เปลี่ยนรหัส':'ตั้งรหัส'}</button>${s.pin?'<button class="d f" style="margin-top:8px" onclick="rmPin()">ปิดรหัส</button>':''}</div>
+  <div class="note">ลืมรหัสแล้วกู้ไม่ได้ ต้องล้างข้อมูลเบราว์เซอร์ ซึ่งข้อมูลจะหายหมด จึงควร Export สำรองไว้ รหัสนี้กันคนเปิดดูทั่วไป ไม่ได้เข้ารหัสข้อมูลในเครื่อง</div>
   <h3>สำรองข้อมูล</h3><div class="note">ข้อมูลทั้งหมดเก็บอยู่ในเครื่องนี้เท่านั้น (ในเบราว์เซอร์) ไม่ได้เก็บบน Cloud หากล้างข้อมูลเบราว์เซอร์หรือเปลี่ยนเครื่อง ข้อมูลจะหาย กรุณา Export สำรองเป็นประจำ</div>
   <div class="btns"><button class="p" onclick="exp_()">Export / Backup</button><label class="btn" style="margin:0">Import<input type="file" accept=".json" hidden onchange="imp(this)"></label></div>`;
 }
 function saveSet(){const p=$('#st_pre').value.trim();if(!p)return alert('กรอกรูปแบบรหัส');db.set.shop=$('#st_shop').value.trim()||'Amulet tl';db.set.prefix=p;save();toast('บันทึกแล้ว');render()}
 function exp_(){const b=new Blob([JSON.stringify(db)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`amulet-backup-${today()}.json`;a.click()}
 function imp(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.amulets)||!Array.isArray(d.models))throw 0;
-  if(!confirm('นำเข้าจะแทนที่ข้อมูลปัจจุบันทั้งหมด ดำเนินการต่อ?'))return;db={...structuredClone(DEF),...d};save();toast('นำเข้าแล้ว');go('home')}catch(e){alert('ไฟล์ไม่ถูกต้อง')}};r.readAsText(f)}
+  if(!confirm('นำเข้าจะแทนที่ข้อมูลปัจจุบันทั้งหมด ดำเนินการต่อ?'))return;const pk=db.set.pin;db={...structuredClone(DEF),...d};if(pk)db.set.pin=pk;save();toast('นำเข้าแล้ว');go('home')}catch(e){alert('ไฟล์ไม่ถูกต้อง')}};r.readAsText(f)}
 /* ---------- boot ---------- */
-load().then(d=>{db=d;render()});
+load().then(d=>{db=d;locked=!!db.set.pin;render()});
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
