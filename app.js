@@ -74,14 +74,29 @@ function models(){
 function model(){
   const m=M(arg),L=db.amulets.filter(a=>a.mid==m.id);
   return `<h2>${esc(m.name)} ${esc(m.gen)}</h2><div class="k">${[m.temple,m.prov,m.mat,m.type,m.year].filter(Boolean).map(esc).join(' • ')}</div>
-  <p>${esc(m.desc)}</p><div class="btns"><button class="p" onclick="newAdd('${m.id}')">+ เพิ่มองค์ในรุ่นนี้</button><button onclick="editM('${m.id}')">แก้ไขรุ่น</button><button class="d" onclick="delM('${m.id}')">ลบรุ่น</button></div>
+  <p>${esc(m.desc)}</p><div class="btns"><button class="p" onclick="newAdd('${m.id}')">+ เพิ่มสต็อกในรุ่นนี้</button><button onclick="editM('${m.id}')">แก้ไขรุ่น</button><button class="d" onclick="delM('${m.id}')">ลบรุ่น</button></div>
+  <div class="card"><b>เพิ่มสต็อกด่วน</b><div class="k">ใส่จำนวน ระบบสร้างให้เลยโดยคัดลอกข้อมูลจากองค์ล่าสุดของรุ่นนี้ เลขประจำองค์รันต่อให้</div>
+  <div class="two">${inp('qa_n','จำนวนองค์',1,1)}${inp('qa_buy','ราคาซื้อ',L.length?L[L.length-1].buy:'',1)}</div>${inp('qa_price','ราคาขาย',L.length?L[L.length-1].price:'',1)}
+  <button class="p f" style="margin-top:8px" onclick="quickAdd('${m.id}')">เพิ่มสต็อก</button></div>
   ${L.map(a=>`<div class="row" onclick="go('detail','${a.id}')"><div class="t"><b>เลข ${esc(a.no)||'-'} • ${esc(a.code)||'-'}</b><span>${esc(a.sku)} • ต้นทุน ${n(cost(a))}</span></div>${chip(a.status)}</div>`).join('')}`;
 }
+function quickAdd(mid){
+  const n=Math.floor(+$('#qa_n').value);if(!(n>=1&&n<=100))return alert('ใส่จำนวน 1-100');
+  const b=$('#qa_buy').value,p=$('#qa_price').value;if((b!==''&&!(+b>=0))||(p!==''&&!(+p>=0)))return alert('ราคาต้องเป็นตัวเลข');
+  if(!confirm(`เพิ่มสต็อก ${n} องค์?`))return;
+  const L=db.amulets.filter(a=>a.mid==mid),l=L[L.length-1]||newItem();let no=l.no||'';
+  for(let i=0;i<n;i++){no=inc(no);while(no&&db.amulets.some(x=>x.mid==mid&&x.no==no))no=inc(no);
+    const a={...newItem(),id:uid(),mid,sku:nextCode(),status:'in',inDate:today(),soldDate:'',no,buy:b,price:p,frame:l.frame||'',ship:l.ship||'',other:l.other||'',min:l.min||'',cond:l.cond||''};
+    db.amulets.push(a);mv(a.id,'ซื้อเข้า');mv(a.id,'เข้าสต็อก')}
+  save();toast(`เพิ่ม ${n} องค์แล้ว`);render()}
 function delM(id){if(db.amulets.some(a=>a.mid==id))return alert('ลบไม่ได้ ยังมีพระในรุ่นนี้ ลบพระทุกองค์ก่อน');
   if(confirm('ลบรุ่นนี้?')){db.models=db.models.filter(m=>m.id!=id);save();go('models')}}
 /* ---------- add / edit form ---------- */
 const newItem=()=>({sku:'',no:'',code:'',buy:'',frame:'',ship:'',other:'',price:'',min:'',cond:'',note:'',img:{}});
-function newAdd(mid=''){draft={mode:'add',mid,m:{},items:[newItem()],multi:false,cnt:5};go('add')}
+const inc=s=>/\d+$/.test(s||'')?s.replace(/\d+$/,m=>String(+m+1).padStart(m.length,'0')):'';
+const CP=['buy','frame','ship','other','price','min','cond'];
+function newAdd(mid=''){draft={mode:'add',mid,m:{},items:[newItem()],multi:!!mid,cnt:5};
+  if(mid){const L=db.amulets.filter(a=>a.mid==mid),l=L[L.length-1];if(l){CP.forEach(k=>draft.items[0][k]=l[k]);draft.items[0].no=inc(l.no)}}go('add')}
 function editA(id){const a=A(id);draft={mode:'editA',aid:id,mid:a.mid,m:{},items:[structuredClone(a)],multi:false};go('add')}
 function editM(id){draft={mode:'editM',mid:id,m:structuredClone(M(id)),items:[]};go('add')}
 const MF=[['name','ชื่อพระ'],['gen','รุ่น'],['temple','วัด / สำนัก'],['prov','จังหวัด'],['mat','เนื้อ'],['type','พิมพ์'],['year','ปีจัดสร้าง'],['qty','จำนวนจัดสร้าง'],['desc','รายละเอียด'],['note','หมายเหตุ']];
@@ -111,7 +126,7 @@ function add(){
    if(m=='add'&&d.multi)h+=`<button class="f" onclick="sync();draft.items.push(newItem());render()">+ เพิ่มองค์</button>`}
   return h+`<div class="btns"><button onclick="go('home')">ยกเลิก</button><button class="p" onclick="saveForm()">บันทึก</button></div>`;
 }
-function setCnt(){const c=Math.max(1,Math.min(100,draft.cnt||1));while(draft.items.length<c)draft.items.push(newItem());draft.items.length=c;render()}
+function setCnt(){const c=Math.max(1,Math.min(100,draft.cnt||1));while(draft.items.length<c){const p=draft.items.at(-1),it=newItem();CP.forEach(k=>it[k]=draft.items[0][k]);it.no=inc(p.no);draft.items.push(it)}draft.items.length=c;render()}
 function saveForm(){
   sync();const d=draft;
   if(d.mode=='editM'){if(!d.m.name?.trim())return alert('กรอกชื่อพระ');Object.assign(M(d.mid),d.m);save();toast('บันทึกแล้ว');return go('model',d.mid)}
