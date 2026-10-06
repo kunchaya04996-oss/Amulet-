@@ -95,45 +95,51 @@ function delM(id){if(db.amulets.some(a=>a.mid==id))return alert('ลบไม่
 const newItem=()=>({sku:'',no:'',code:'',buy:'',frame:'',ship:'',other:'',price:'',min:'',cond:'',note:'',img:{}});
 const inc=s=>/\d+$/.test(s||'')?s.replace(/\d+$/,m=>String(+m+1).padStart(m.length,'0')):'';
 const CP=['buy','frame','ship','other','price','min','cond'];
-function newAdd(mid=''){draft={mode:'add',mid,m:{},items:[newItem()],multi:!!mid,cnt:5};
+function newAdd(mid=''){draft={mode:'add',mid,m:{},items:[newItem()],each:false,cnt:1};
   if(mid){const L=db.amulets.filter(a=>a.mid==mid),l=L[L.length-1];if(l){CP.forEach(k=>draft.items[0][k]=l[k]);draft.items[0].no=inc(l.no)}}go('add')}
 function editA(id){const a=A(id);draft={mode:'editA',aid:id,mid:a.mid,m:{},items:[structuredClone(a)],multi:false};go('add')}
 function editM(id){draft={mode:'editM',mid:id,m:structuredClone(M(id)),items:[]};go('add')}
-const MF=[['name','ชื่อพระ'],['gen','รุ่น'],['temple','วัด / สำนัก'],['prov','จังหวัด'],['mat','เนื้อ'],['type','พิมพ์'],['year','ปีจัดสร้าง'],['qty','จำนวนจัดสร้าง'],['desc','รายละเอียด'],['note','หมายเหตุ']];
+const MF=[['name','ชื่อพระ'],['gen','รุ่น'],['temple','วัด / สำนัก'],['prov','จังหวัด'],['mat','เนื้อ'],['type','พิมพ์'],['year','ปีจัดสร้าง'],['desc','รายละเอียด'],['note','หมายเหตุ']];
 const IF=[['no','เลขประจำองค์'],['code','โค้ด'],['buy','ราคาซื้อ'],['frame','ค่ากรอบ'],['ship','ค่าส่ง'],['other','ค่าใช้จ่ายอื่น'],['price','ราคาขาย'],['min','ราคาต่ำสุด']];
 const inp=(id,l,v,num)=>`<label>${l}<input id="${id}" value="${esc(v)}" ${num?'inputmode="decimal"':''}></label>`;
 function sync(){if(page!='add'||!draft)return;
   if($('#m_name')||draft.mode=='editM')MF.forEach(([k])=>{const e=$('#m_'+k);if(e)draft.m[k]=e.value});
-  const e=$('#cnt');if(e)draft.cnt=+e.value;
+  const e=$('#cnt');if(e)draft.cnt=Math.max(1,Math.min(100,Math.floor(+e.value)||1));
   draft.items.forEach((it,i)=>{[...IF.map(x=>x[0]),'cond','note'].forEach(k=>{const e=$(`#i${i}_${k}`);if(e)it[k]=e.value})})}
 function photo(i,k,l,u){return `<label class="ph">${u?`<img src="${u}">`:`<span>${l}</span>`}<input type="file" accept="image/*" hidden onchange="pick(this,${i},'${k}')"></label>`}
 function pick(inp,i,k){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{
   const s=Math.min(1,900/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);
   const u=c.toDataURL('image/jpeg',.72);if(i=='logo'){db.set.logo=u;save()}else{sync();if(i=='m')draft.m.img=u;else draft.items[i].img[k]=u}render()};im.src=r.result};r.readAsDataURL(f)}
 function add(){
-  const d=draft,m=d.mode,showM=m=='editM'||(m=='add'&&!d.mid);
+  const d=draft,m=d.mode,showM=m=='editM'||(m=='add'&&!d.mid),shared=m=='add'&&!d.each&&d.cnt>1;
   let h=`<h2>${m=='add'?'เพิ่มพระ':m=='editA'?'แก้ไขพระ':'แก้ไขรุ่น'}</h2>`;
-  if(m=='add')h+=`<div class="chips"><button class="${d.multi?'':'on'}" onclick="sync();draft.multi=false;draft.items=[draft.items[0]];render()">เพิ่ม 1 องค์</button><button class="${d.multi?'on':''}" onclick="sync();draft.multi=true;render()">เพิ่มหลายองค์จากรุ่นเดียวกัน</button></div>
-  <label>รุ่น<select onchange="sync();draft.mid=this.value;render()"><option value="">+ สร้างรุ่นใหม่</option>${db.models.map(x=>`<option value="${x.id}" ${x.id==d.mid?'selected':''}>${esc(x.name)} ${esc(x.gen)}</option>`).join('')}</select></label>`;
-  if(showM)h+=`<h3>ข้อมูลรุ่น (กรอกครั้งเดียว)</h3><div class="card">${MF.map(([k,l])=>inp('m_'+k,l,d.m[k]||'',k=='qty')).join('')}<div style="max-width:120px;margin-top:8px">${photo('m','',  'รูปรุ่น',d.m.img)}</div></div>`;
-  if(m=='add'&&d.multi)h+=`<div class="card"><label>จำนวนองค์<input id="cnt" type="number" min="1" max="100" value="${d.cnt||5}"></label>
-  <button class="f" onclick="sync();setCnt()">สร้างรายการตามจำนวน</button></div>`;
-  if(m!='editM'){h+=d.items.map((it,i)=>`<div class="card"><b>องค์ที่ ${i+1}</b>${m=='editA'?` <span class="k">${esc(it.sku)}</span>`:''}
-   <div class="two">${IF.map(([k,l])=>`<div>${inp(`i${i}_${k}`,l,it[k],!['no','code'].includes(k))}</div>`).join('')}</div>
+  if(m=='add'){
+    h+=`<label>รุ่น<select onchange="sync();draft.mid=this.value;render()"><option value="">+ สร้างรุ่นใหม่</option>${db.models.map(x=>`<option value="${x.id}" ${x.id==d.mid?'selected':''}>${esc(x.name)} ${esc(x.gen)}</option>`).join('')}</select></label>`;
+    var cntBox=`<label>จำนวนที่มีอยู่ในสต็อก (องค์)<input id="cnt" type="number" inputmode="numeric" min="1" max="100" value="${d.each?d.items.length:d.cnt}" onchange="sync();d_cnt()"></label>
+    <div class="k">${d.mid?`ตอนนี้รุ่นนี้มี ${db.amulets.filter(a=>a.mid==d.mid).length} องค์ จำนวนนี้คือที่จะเพิ่มใหม่ • `:''}ไม่มีเลขหรือโค้ดก็ใส่จำนวนได้เลย</div>
+    <button class="f" style="margin-top:8px" onclick="sync();toggleEach()">${d.each?'กลับไปกรอกแบบรวม (ข้อมูลเหมือนกันทุกองค์)':'กรอกรายองค์ (เลขประจำองค์ / โค้ด / รูป)'}</button>`}
+  if(m=='add'&&!showM)h+=`<div class="card">${cntBox}</div>`;
+  if(showM)h+=`<h3>ข้อมูลรุ่น (กรอกครั้งเดียว)</h3><div class="card">${MF.map(([k,l])=>inp('m_'+k,l,d.m[k]||'')).join('')}<div style="max-width:120px;margin-top:8px">${photo('m','','รูปรุ่น',d.m.img)}</div>${m=='add'?`<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:4px">${cntBox}</div>`:''}</div>`;
+  if(m!='editM'){const L=(m=='add'&&!d.each)?d.items.slice(0,1):d.items;
+   h+=L.map((it,i)=>`<div class="card"><b>${shared?`ราคา/สภาพที่ใช้ร่วมกันทั้ง ${d.cnt} องค์`:`องค์ที่ ${i+1}`}</b>${m=='editA'?` <span class="k">${esc(it.sku)}</span>`:''}
+   <div class="two">${IF.filter(([k])=>!(shared&&['no','code'].includes(k))).map(([k,l])=>`<div>${inp(`i${i}_${k}`,l,it[k],!['no','code'].includes(k))}</div>`).join('')}</div>
    ${inp(`i${i}_cond`,'สภาพพระ',it.cond)}${inp(`i${i}_note`,'หมายเหตุ',it.note)}
-   <div class="photos">${[['f','หน้า'],['b','หลัง'],['s','ข้าง'],['d','ตำหนิ']].map(([k,l])=>photo(i,k,l,it.img[k])).join('')}</div>
-   ${m=='add'&&d.items.length>1?`<button class="d f" style="margin-top:8px" onclick="sync();draft.items.splice(${i},1);render()">ลบองค์นี้</button>`:''}</div>`).join('');
-   if(m=='add'&&d.multi)h+=`<button class="f" onclick="sync();draft.items.push(newItem());render()">+ เพิ่มองค์</button>`}
+   ${shared?'<div class="k">เลขประจำองค์ โค้ด และรูป เพิ่มทีหลังได้โดยแตะที่องค์นั้น แล้วกดแก้ไข</div>':`<div class="photos">${[['f','หน้า'],['b','หลัง'],['s','ข้าง'],['d','ตำหนิ']].map(([k,l])=>photo(i,k,l,it.img[k])).join('')}</div>`}
+   ${m=='add'&&d.each&&d.items.length>1?`<button class="d f" style="margin-top:8px" onclick="sync();draft.items.splice(${i},1);render()">ลบองค์นี้</button>`:''}</div>`).join('');
+   if(m=='add'&&d.each)h+=`<button class="f" onclick="sync();draft.items.push(newItem());render()">+ เพิ่มองค์</button>`}
   return h+`<div class="btns"><button onclick="go('home')">ยกเลิก</button><button class="p" onclick="saveForm()">บันทึก</button></div>`;
 }
+function d_cnt(){if(draft.each)setCnt();else render()}
+function toggleEach(){draft.each=!draft.each;if(draft.each)setCnt();else{draft.items=[draft.items[0]];render()}}
 function setCnt(){const c=Math.max(1,Math.min(100,draft.cnt||1));while(draft.items.length<c){const p=draft.items.at(-1),it=newItem();CP.forEach(k=>it[k]=draft.items[0][k]);it.no=inc(p.no);draft.items.push(it)}draft.items.length=c;render()}
 function saveForm(){
   sync();const d=draft;
   if(d.mode=='editM'){if(!d.m.name?.trim())return alert('กรอกชื่อพระ');Object.assign(M(d.mid),d.m);save();toast('บันทึกแล้ว');return go('model',d.mid)}
   const mid=d.mid||uid();
+  const list=(d.mode=='add'&&!d.each&&d.cnt>1)?Array.from({length:d.cnt},()=>({...structuredClone(d.items[0]),no:'',code:'',img:{}})):d.items;
   if(!d.mid&&!d.m.name?.trim())return alert('กรอกชื่อพระ');
   const seenN=new Set(),seenC=new Set();
-  for(const[i,it]of d.items.entries()){
+  for(const[i,it]of list.entries()){
     for(const k of['buy','frame','ship','other','price','min'])if(it[k]!==''&&!(+it[k]>=0))return alert(`องค์ที่ ${i+1}: ${k} ต้องเป็นตัวเลขไม่ติดลบ`);
     const others=db.amulets.filter(a=>a.mid==mid&&a.id!=it.id&&a.id!=d.aid);
     const no=it.no.trim(),code=it.code.trim();
@@ -142,7 +148,7 @@ function saveForm(){
     seenN.add(no);seenC.add(code)}
   if(d.mode=='editA'){const a=A(d.aid),it=d.items[0];['no','code','buy','frame','ship','other','price','min','cond','note','img'].forEach(k=>a[k]=it[k]);mv(a.id,'แก้ไขข้อมูล');save();toast('บันทึกแล้ว');return go('detail',a.id)}
   if(!d.mid)db.models.push({id:mid,...d.m});
-  const made=d.items.map(it=>{const a={...it,id:uid(),mid,sku:nextCode(),status:'in',inDate:today(),soldDate:''};db.amulets.push(a);mv(a.id,'ซื้อเข้า');mv(a.id,'เข้าสต็อก');return a.sku});
+  const made=list.map(it=>{const a={...it,id:uid(),mid,sku:nextCode(),status:'in',inDate:today(),soldDate:''};db.amulets.push(a);mv(a.id,'ซื้อเข้า');mv(a.id,'เข้าสต็อก');return a.sku});
   save();toast(`เพิ่ม ${made.length} องค์ (${made[0]}${made.length>1?' ถึง '+made.at(-1):''})`);go(d.mid?'model':'models',mid)}
 /* ---------- detail ---------- */
 function detail(){
